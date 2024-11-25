@@ -1,5 +1,6 @@
 library(GGally)
 library(bio303.practicals)
+library(tidyverse)
 library(vegan)
 library(mgcv)
 
@@ -12,23 +13,12 @@ data(ponds_env, package = "bio303.practicals")
 
 
 ## 1.2 The environmental data ##
-hist(ponds_env$Maxdept)
-hist(ponds_env$Secchi)
-hist(ponds_env$Chla)
-hist(ponds_env$SO4)
-hist(ponds_env$Cl)
-hist(ponds_env$Ca)
-hist(ponds_env$Mg)
-hist(ponds_env$K)
-hist(ponds_env$Na)
-hist(ponds_env$NO3)
-hist(ponds_env$SiO2)
-hist(ponds_env$TP)
-hist(ponds_env$Alkalinity)
-hist(ponds_env$Conductivity)
-hist(ponds_env$pH)
+ponds_env |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |> 
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 10) +
+  facet_wrap(~ variable, scales = "free_x")
 
-pairs(ponds_env)
 ggpairs(ponds_env)
 
 
@@ -38,7 +28,7 @@ env_shannon <- dplyr::mutate(ponds_env, shannon)
 
 plot_shannon_TP <- ggplot(env_shannon, aes(x = TP, y = shannon)) +
   geom_point() +
-  geom_smooth()
+  geom_smooth(method = "lm")
 
 plot_shannon_TP
 
@@ -47,11 +37,13 @@ cor.test(env_shannon$shannon,
 
 
 ## 1.4 Species-environment relationships ##
-spp_TP <- dplyr::tibble(taxon = ponds_spp$AC013A, TP = ponds_env$TP)
+(common <- which(colSums(ponds_spp > 0) > 15))
+
+spp_TP <- dplyr::tibble(taxon = ponds_spp$AC013A, TP = ponds_env$TP) # AC001A most common?
 
 plot_spp_TP <- ggplot(spp_TP, aes(x = TP, y = taxon)) +
   geom_point() +
-  geom_smooth() 
+  geom_smooth(method = "lm") 
 
 plot_spp_TP
 
@@ -73,6 +65,7 @@ plot(all, species_composition)
   
 selected_env <- ponds_env[, c ("Ca", "Maxdept", "Mg", "TP", "pH")]
 bioenv(ponds_spp, selected_env) # Maxdept and TP are the best variables
+# bioenv(ponds_spp, ponds_env, upto = 5)
 
 species_composition2 <- vegdist(ponds_spp, method = "euclidean")
 
