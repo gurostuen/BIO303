@@ -1,0 +1,640 @@
+---
+title: "BIO303 Home Exam 2024"
+author: Guro Ødegårdstuen
+date: today
+format: 
+  html:
+    link-external-newwindow: true
+    self-contained: true
+    code-tools: 
+      source: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+\
+
+1)  **Briefly describe the data you have to analyse for your MSc/PhD (if
+    you don't have any relevant data, consider a dataset you have worked
+    on before, or might want to work on in the future).**
+
+The [**dataset**](https://ipt.gbif.no/resource?r=ab-201_2022) from the
+AB-201 course that I took as part of my bachelor's includes vegetation
+recordings, plant traits and abiotic factors such as soil moisture, pH,
+C/N content, slope aspect, temperatures etc. These data were collected
+from different sites around the coast of Isfjorden, Svalbard. At each
+site, 9 plots were investigated along a topographic gradient, with 3
+plots each at the ridge, slope and bottom elevations. These data are
+well-suited for ecological studies, particularly for exploring
+relationships between vegetation and abiotic environmental factors.
+
+**Discuss how you could use at least two of the following methods to
+analyse your data:**
+
+**• Cluster analysis**
+
+**• Unconstrained ordination**
+
+**• Constrained ordination**
+
+**• Any other multivariate method (e.g., multivariate trees, principal
+response curves, Procrustes rotation)**
+
+**For each method, discuss how it would help you test your hypothesis,
+which diagnostics you would use, how you would interpret them, and how
+you would identify any artifacts.**
+
+For this data, I would use cluster analysis and constrained ordination
+to explore patterns and test hypotheses related to
+vegetation-environment relationships:
+
+**Cluster analysis** could group vegetation plots (e.g., at the ridge,
+slope and bottom of a gradient) based on their similarity in plant
+traits and species composition. It could help identify distinct
+vegetation communities and test the hypothesis that these communities
+differ due to abiotic conditions, such as soil pH or moisture (e.g., the
+exposed ridge with less soil moisture might support different species
+compared to the bottom). To validate clustering results, I would use
+dendrograms for visual inspection and evaluate cluster robustness with
+p-values from multiscale bootstrap resampling. If the identified
+clusters align with environmental gradients, this could suggest
+ecological differentiation. Artifacts may come from scaling issues or
+from variables with high variance, but low ecological relevance.
+
+**Constrained ordination** models the relationship between vegetation
+composition and environmental variables, which can be used to test how
+specific factors drive community patterns. For example, I could test the
+hypothesis that vegetation composition is strongly influenced by soil
+moisture and pH. Constrained ordination methods like RDA or CCA would
+quantify and visualize how much variation in vegetation data is
+explained by these abiotic factors. I could examine eigenvalues to
+determine how much variance is explained by the ordination axes, use
+permutation tests (e.g., for significance of constraints) to ensure
+observed patterns are statistically robust and check VIFs to avoid
+multicollinearity artifacts among explanatory variables. Artifacts may
+occur due to overfitting or irrelevant predictors, but these could be
+addressed by using stepwise selection procedures or partial ordination.
+For example, if elevation is not of interest, I could use partial
+constrained ordination to "factor out" its influence and focus on other
+variables.
+
+\
+
+2)  **Radiolaria are planktic protists with silicious shells. Their
+    remains can be found preserved in ocean sediments. This question
+    uses the radiolarian data from Hernández-Almeida et al 2020
+    (https://doi.pangaea.de/10.1594/PANGAEA.923034) who report
+    percentage abundance of radiolarian species from locations across
+    the Pacific ocean, and related environmental variables.**
+
+<!-- -->
+
+A)  **Go to the webpage to see the metadata and download the data.
+    Import the data into R and separate into species data, environmental
+    data and meta data (reference to latitude). Delete the water depth
+    column (it has missing data).**
+
+```{r}
+#| label: import-data
+#| message: false
+#| warning: false
+
+library(here)
+library(tidyverse)
+
+radiolaria <- read.delim(here("./data/Radiolaria.tab"), skip = 539) |> 
+  janitor::clean_names() |> 
+  select(-depth_water_m) |> 
+  dplyr::rename("Pexp" = pexp_g_m_2_a,
+         "Temp_sst_10m" = temp_c_sst_10_m_extracted_from_the,
+         "Temp_sst_500m" = temp_c_sst_500_m_extracted_from_the,
+         "Sal_10m" = sal_10_m_extracted_from_the_worl,
+         "NO3_10m" = x_no3_mg_kg_10_m_extracted_from_the_worl,
+         "TDP_10m" = tdp_mmol_kg_10_m_extracted_from_the_worl,
+         "SiOH4_10m" = si_oh_4_mmol_kg_10_m_extracted_from_the_worl,
+         "Temp_sst_200m" = temp_c_sst_200_m_extracted_from_the,
+         "Sal_200m" = sal_200_m_extracted_from_the_wor,
+         "NO3_200m" = x_no3_mg_kg_200_m_extracted_from_the_wor,
+         "TDP_200m" = tdp_mmol_kg_200_m_extracted_from_the_wor,
+         "SiOH4_200m" = si_oh_4_mmol_kg_200_m_extracted_from_the_wor,
+         "Chla" = chl_a_conf_modis,
+         "MLD" = mld_m_after_monterey_levitus_1997,
+         "NPPC" = npp_c_mg_m_2_day_ocean_productivity,
+         "AOU_10m" = aou_mol_m_3_10_m_extracted_from_the_worl,
+         "AOU_200m" = aou_mol_m_3_200_m_extracted_from_the_wor
+         )
+
+sp <- radiolaria |>  select(a_castanoides_calculated:d_bandaicum_calculated)
+
+env <- radiolaria |> select(Pexp:AOU_200m)
+  
+meta <- radiolaria |> select(reference:latitude)
+```
+
+\
+
+B)  **Make an appropriate ordination of the environmental data. How many
+    axes of the ordination are interpretable? Make a publishable plot
+    showing the ordination.**
+
+PCA on unscaled data shows a horseshoe artifact and a strong gradient in PC1, suggesting that the data might be nonlinear. Scaling the data for PCA improves the ordination, as the first two principal components together explain most of the variance ([figure @fig-scree-plot]).
+
+CA (untransformed and hellinger-transformed) seems to capture the
+non-linearity in the data, and the eigenvalues are higher compared to
+PCA. However, there is some curvature in the plots, which complicates
+the interpretation. DCA also does not seem appropriate, due to triangle
+artifacts.
+
+NMDS gave a relatively low stress value of 0.098, indicating that the
+first two axes are interpretable. Although NMDS and PCoA could both also be useful for understanding the data, I chose PCA in this case ([figure @fig-env-data-pca]) due to its simpler interpretation and effectiveness in revealing the primary axes of variation. The short gradient lengths from DCA suggest that the data is relatively linear, further supporting the use of PCA for this analysis.
+
+```{r}
+#| label: env-data
+#| message: false
+#| include: false
+
+library(vegan)
+library(ggvegan)
+library(GGally)
+
+env |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |> 
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 10) +
+  facet_wrap(~ variable, scales = "free_x")
+
+ggpairs(env) # Right-skewed distribution of some variables ?
+
+# Some variables have negative values --> add positive values
+env_mod <- env |> 
+  mutate(
+    AOU10m2 = AOU_10m + 1,
+    AOU200m2 = AOU_200m + 1,
+    Temp_sst_10m2 = Temp_sst_10m + 10,
+    Temp_sst_200m2 = Temp_sst_200m + 10
+  ) |> 
+  select(-Temp_sst_10m, -Temp_sst_200m, -AOU_10m, -AOU_200m)
+
+any(env_mod < 0, na.rm = TRUE)
+
+scaled_env <- scale(env)
+scaled <- as.data.frame(scaled_env)
+
+PCA <- rda(env_mod)   
+PCA # PCA1 very strong, indicating a non-linear structure of the data
+PCAs <- rda(scaled)
+PCAs # Better, PC1 = 8.836 and PC2 = 3.021
+screeplot(PCAs, bstick = TRUE)
+autoplot(PCAs)
+
+PCA2 <- rda(decostand(env_mod, "hellinger"))
+screeplot(PCA2, bstick = TRUE)
+plot(PCA2) # Horseshoe ?
+
+PCA3 <- rda(decostand(env_mod, "log"))
+screeplot(PCA3, bstick = TRUE)
+plot(PCA3) # Also horseshoe ?
+
+
+CA <- cca(env_mod)
+screeplot(CA, bstick = TRUE)
+plot(CA) # Curvature ?
+
+CA2 <- cca(decostand(env_mod, "hellinger"))
+screeplot(CA2, bstick = TRUE)
+plot(CA2) # Looks better, but still curved
+
+CA3 <- cca(decostand(env_mod, "log"))
+screeplot(CA3, bstick = TRUE)
+plot(CA3) 
+
+
+DCA <- decorana(env_mod) 
+plot(DCA) # Triangle artifact ?
+DCA # DCA1 has length 1.6285
+
+DCA2 <- decorana(decostand(env_mod, "hellinger"))
+plot(DCA2) # Still weird
+DCA2 
+
+DCA3 <- decorana(decostand(env_mod, "log"))
+plot(DCA3) # Also weird
+DCA3
+
+
+dbRDA <- dbrda(env_mod ~ 1, distance = "bray")
+plot(dbRDA)
+dbRDA # MDS1 = 21, MDS2 = 5
+
+dbRDA2 <- dbrda(decostand(env_mod, "hellinger") ~ 1, distance = "bray")
+plot(dbRDA2)
+dbRDA2
+
+dbRDA3 <- dbrda(decostand(env_mod, "log") ~ 1, distance = "bray")
+plot(dbRDA3)
+dbRDA3
+
+
+NMDS <- metaMDS(env_mod, k = 2)
+NMDS # Stress = 0.098
+```
+
+```{r}
+#| label: fig-scree-plot
+#| echo: false
+#| message: false
+#| fig-cap: Scree plot showing the eigenvalues for each principal component of the PCA on scaled environmental data, alongside the broken-stick model for comparison. The total inertia is 17, with PC1 and PC2 explaining 8.8 and 3 units of variance, respectively
+
+screeplot(PCAs, bstick = TRUE)
+```
+
+```{r}
+#| label: fig-env-data-pca
+#| message: false
+#| echo: false
+#| warning: false
+#| fig-cap: PCA of scaled environmental variables. Points represent samples grouped by provinces, indicated by colors and shapes. Arrows represent the environmental variables, scaled to indicate their contribution to the PCA axes. The PCA shows the primary gradients in environmental data across the study area, with PC1 and PC2 explaining 52% and 18% of the variance, respectively.
+
+library(ggvegan)
+
+PCA_fort <- fortify(PCAs, display = "sites")
+plot <- bind_cols(PCA_fort, Province = meta$code_provcode)
+
+PCA_vectors <- as.data.frame(scores(PCAs, display = "species"))
+PCA_vectors$Variable <- rownames(PCA_vectors)
+PCA_vectors_scaled <- PCA_vectors |> 
+  mutate(across(c(PC1, PC2), ~ . * 0.5))
+
+PCA_plot <- ggplot(plot, 
+                   aes(x = PC1, y = PC2, 
+                   colour = Province, shape = Province)) +
+  geom_point() + 
+  scale_shape_manual(values = c(0:25)) +  
+  coord_equal() +
+  xlim(-2.5, 2.5) +  
+  ylim(-2.5, 2) +  
+  labs(color = "Province", shape = "Province") +
+  geom_segment(data = PCA_vectors_scaled, 
+               aes(x = 0, y = 0, xend = PC1, yend = PC2), 
+               arrow = arrow(length = unit(0.2, "cm")), 
+               inherit.aes = FALSE, color = "black", size = 0.5) +
+  geom_text(data = PCA_vectors_scaled, 
+            aes(x = PC1, y = PC2, label = Variable), 
+            inherit.aes = FALSE, color = "black", hjust = 1.5, vjust = 1.5,
+            size = 3) +  
+  theme_bw() 
+
+PCA_plot
+```
+
+```{r}
+#| label: fig-env-data-nmds
+#| message: false
+#| echo: false
+#| warning: false
+#| include: false
+#| fig-cap: NMDS ordination of environmental data across Pacific Ocean core-tops, showing the relationships between sites (colored by province) and environmental factors. Environmental variables are fitted onto the ordination to illustrate their influence on site distributions. The NMDS plot reflects the relative positioning of the sites based on environmental dissimilarities, with arrows indicating the direction and strength of environmental gradients.
+
+NMDS_scores <- scores(NMDS, display = "sites")
+df <- as.data.frame(NMDS_scores)
+
+NMDS_scores$provcode <- meta$code_provcode  
+
+nmds <- ggplot(df, aes(x = NMDS1, y = NMDS2, color = meta$code_provcode, shape = meta$code_provcode)) +
+  geom_point(size = 3) +
+  labs(x = "NMDS1", y = "NMDS2", color = "Province", shape = "Province") + 
+  theme_bw() +
+  theme(legend.position = "right")
+
+envfit_NMDS <- envfit(NMDS, env_mod, perm = 999)
+env_vectors <- as.data.frame(scores(envfit_NMDS, display = "vectors"))
+
+NMDS_plot <- nmds + 
+  geom_segment(data = env_vectors, 
+               aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+               arrow = arrow(type = "closed", length = unit(0.1, "inches")),
+               color = "black", inherit.aes = FALSE) +  
+  geom_text(data = env_vectors, 
+            aes(x = NMDS1, y = NMDS2, label = rownames(env_vectors)), 
+            size = 3, color = "black", inherit.aes = FALSE) +  
+  scale_shape_manual(values = c(0:25)) +
+  theme_bw() + 
+  labs(x = "NMDS1", y = "NMDS2", color = "Province", shape = "Province")
+
+NMDS_plot
+```
+
+\
+
+C)  **Using appropriate data transformations and treatment of rare taxa,
+    determine whether linear or unimodal methods are more appropriate
+    for ordinating the species data.**
+
+Since DCA1 has long gradient lengths across different transformations, the species data is most likely nonlinear. This indicates that unimodal ordination methods such as DCA, CCA or NMDS are more appropriate than linear methods like PCA.
+
+```{r}
+#| label: sp-data
+#| message: false
+#| echo: true
+#| warning: false
+#| eval: false
+
+dca <- decorana(sp)
+dca # DCA1 has length 6.45
+
+dcas <- decorana(sqrt(sp))
+dcas # DCA1 has length 5.56
+
+dcah <- decorana(decostand(sp, "hellinger")) # Deals with rare taxa also
+dcah # DCA1 has length 5.45
+
+dcal <- decorana(decostand(sp, "log"))
+dcal #DCA1 has length 4.85
+```
+
+\
+
+D)  **Discuss the problems that might occur if all the environmental
+    variables are included as predictors. Show the problems where
+    possible.**
+
+When environmental variables are highly correlated with each other
+(multicollinearity), it can lead to unstable estimates of the model
+parameters. This reduces the reliability of the
+results and makes it difficult to interpret the individual effect of
+each predictor.
+
+If all the environmental variables are included in the analysis,
+especially if you have many variables relative to the number of
+observations, you run the risk of overfitting the model. Moreover,
+including too many environmental variables in an ordination method can
+lead to high-dimensional data, which can be difficult to interpret. It
+can also lead to misleading relationships, especially if they are
+correlated with other predictors.
+
+If the variance inflation factor (VIF) of a variable is \> 20, then that variable is almost perfectly correlated with other
+variables and has no unique contribution to the model. It can be useful
+to remove such variables to make the model easier to interpret. In the
+model below, the following environmental variables had a VIF above
+20 ([table @tbl-vifs]): **AOU_200m, NO3_10m, NO3_200m,
+SiOH4_10m, SiOH4_200m, TDP_10m, TDP_200m, Temp_sst_10m** and
+**Temp_sst_200m**. This is problematic because including them increases
+the complexity of the ordination unnecessarily and can distort the
+interpretation of how environmental gradients influence species
+distributions.
+
+```{r}
+mod <- cca(decostand(sp, method = "hellinger") ~ ., data = env)
+```
+
+```{r}
+#| label: tbl-vifs
+#| echo: false
+#| message: false
+#| warning: false
+#| tbl-cap: Environmental variables with a VIF greater than 20 indicate strong multicollinearity.
+
+library(gt)
+
+mod2 <- rda(decostand(sp, method = "hellinger") ~ ., data = scaled)
+
+vif <- vif.cca(mod) # Several variables have a VIF > 20
+vif2 <- vif.cca(mod2) # Same with the scaled variables, slightly higher
+
+vif_tibble <- as.data.frame(vif)
+vif_tibble <- vif_tibble |> 
+  rownames_to_column(var = "Variable") |> 
+  rename(VIF = vif) |> 
+  arrange(Variable)
+
+vif_table <- vif_tibble |> 
+  gt() |> 
+  cols_align(
+    align = "center",
+    columns = everything()) |> 
+  fmt_number(decimals = 2)  |>
+  tab_options(
+    container.width = 800, 
+    container.height = 300) |> 
+  opt_stylize(style = 6, color = 'gray') |> 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = vars(Variable, VIF),
+      rows = VIF >= 20))
+
+vif_table
+```
+
+\
+
+```{r}
+#| label: fig-correlations
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-cap: Correlation plot of the environmental variables showing pairwise relationships. Some relationships (e.g. between TDP and NO₃⁻) are consistent with the high VIFs, indicating potential multicollinearity.
+
+library(corrplot)
+
+cor_matrix <- cor(env)
+cor_plot <- corrplot(cor_matrix, 
+         method = "circle", 
+         addCoef.col = "black",
+         number.cex = 0.5,
+         tl.col = "black")
+```
+
+\
+
+E)  **Determine which environmental variable is the best predictor of
+    Radiolarian species composition.**
+
+In this dataset, many environmental variables, such as NO₃⁻, TDP and
+SiOH4, are strongly correlated across depths. This redundancy can
+obscure individual effects, so to follow Occam's razor by having as few
+parameters as possible, I think it's beneficial to remove
+highly correlated variables or summarize them.
+
+**Temp_sst_10m** and **Temp_sst_200** have an R² value above 0.7, but
+also high VIFs ([table @tbl-vifs]). Among variables with lower
+VIFs, **Temp_sst_500m** and **Sal_10m** explain a substantial portion of
+variation (R² \> 0.5)([table @tbl-variables]). While all predictors are depth-related, focusing on surface conditions with Temp_sst_10m avoids redundancy with deeper variables. Similarly, **Sal_10m** is a distinct and independent variable that avoids redundancy while maintaining predictive power. For these reasons, I think **Temp_sst_10m** and **Sal_10m** are the best predictors of Radiolarian species composition.
+
+```{r}
+#| label: tbl-variables
+#| echo: false
+#| message: false
+#| warning: false
+#| tbl-cap: Environmental variables fitted to Radiolarian species composition using envfit.
+
+fit <- envfit(mod, env, perm = 999)
+
+results <- data.frame(
+  Variable = names(fit$vectors$r),
+  r2 = fit$vectors$r,
+  p_value = fit$vectors$pvals
+)
+
+cor_table <- results |> 
+  gt() |> 
+  cols_label(
+    r2 = "R²",
+    p_value = "p-value") |>
+  fmt_number(
+    columns = vars(r2, p_value),
+    decimals = 3) |> 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = vars(r2),
+      rows = r2 > 0.5)) |> 
+  tab_options(
+    container.width = px(800),
+    container.height = px(400)) |> 
+  opt_stylize(style = 6, color = 'gray')
+
+cor_table
+```
+
+\
+
+F)  **Run a forward selection to find the "best" model for explaining
+    Radiolarian species composition. Discuss why so many variables are
+    selected as predictors. How could you correct the analysis for this
+    problem?**
+
+Forward selection identified several environmental variables as
+significant predictors of Radiolarian species composition. The inclusion of many predictors most likely results from multicollinearity (e.g., similar variables measured at different depths). To improve model interpretability, I would remove highly collinear predictors and restrict variable inclusion based on biological relevance. 
+
+```{r}
+#| label: model-selection
+#| message: false
+
+intercept <- cca(decostand(sp, method = "hellinger") ~ 1, data = env)
+all <- cca(decostand(sp, method = "hellinger") ~ ., data = env)
+
+# It takes forever to run, but I used this function:
+
+  # model <- ordistep(intercept, scope = formula(all), direction = "forward")
+  # model$anova
+  # plot(model)
+```
+\
+
+G)  **Fit a model with 10 m sea surface temperature and net primary
+    productivity as predictors. Make a publishable plot of this model.**
+
+```{r}
+#| label: fit-model
+
+fit_model <- cca(sp ~ Temp_sst_10m + NPPC, data = env)
+```
+
+```{r}
+#| label: fig-model
+#| echo: false
+#| message: false
+#| fig-cap: CCA Radiolarian species composition based on sea surface temperature at 10m and net primary productivity. The arrows indicate the direction of each environmental variable's influence on species composition. The ordination axes represent the main gradients of species variation explained by these predictors. Species are shown as red crosses, and sites as black circles.
+
+# summary(fit_model)
+plot(fit_model)
+```
+\
+
+H)  **Use a cluster analysis to find clusters of sites. Decide how many
+    clusters are interpretable and make a geographic map to show these
+    clusters, and plots to show how they differ with respect to 10 m sea
+    surface temperature and net primary productivity.**
+    
+Using Ward's distance, three interpretable clusters were identified. Cluster 3 sites are primarily located along coastlines, as shown on the map ([figure @fig-map]), while Cluster 1 and 2 sites are more spread out.
+
+SST at 10m is relatively consistent across clusters, with a median of around 15°C. Cluster 1 exhibits the widest interquartile range ([figure @fig-boxplots]), but no significant differences in SST at 10m were detected between clusters. In contrast, the boxplots for NPP show that Cluster 3 has a notably higher median NPP compared to Clusters 1 and 2, suggesting a more biologically productive environment. Although there are a few high-value outliers, the significant p-value (p < 0.001) confirms that NPP differs significantly among clusters.
+
+```{r}
+#| label: clusters
+#| echo: false
+#| message: false
+#| include: false
+
+cluster_data <- scaled |> select(Temp_sst_10m, NPPC)
+d <- vegdist(cluster_data, method = "bray")
+
+cs <- hclust(d, method = "single")
+plot(cs)
+rect.hclust(cs, k = 2)
+ggdendro::ggdendrogram(cs)
+
+cc <- hclust(d, method = "complete")
+plot(cc)
+rect.hclust(cc, k = 3)
+ggdendro::ggdendrogram(cc)
+
+cw <- hclust(d, method = "ward.D")
+plot(cw)
+rect.hclust(cw, k = 3)
+ggdendro::ggdendrogram(cw)
+
+clusters <- cutree(cw, k = 3)
+scaled$Cluster <- factor(clusters)
+```
+
+```{r fig.width=10}
+#| label: fig-map
+#| echo: false
+#| message: false
+#| fig-cap: Geographic map showing clusters of sampling sites based on environmental conditions. Clusters were determined using hierarchical clustering, and each cluster is represented by a distinct color.
+
+library(viridis)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggspatial)
+
+meta_env <- radiolaria |> select(reference:AOU_200m) |> 
+  select(-reference, -code_provcode, -location)
+
+meta_env$Cluster <- as.factor(clusters)
+
+env_sf <- st_as_sf(meta_env, coords = c("longitude", "latitude"), crs = 4326)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+ggplot() +
+  geom_sf(data = world, fill = "gray80", color = "gray50") +
+  geom_sf(data = env_sf, aes(color = Cluster), size = 2) +
+  scale_color_viridis_d(option = "C") +
+  theme_bw() +
+  labs(color = "Cluster")
+```
+
+```{r}
+#| label: fig-boxplots
+#| echo: false
+#| message: false
+#| fig-cap: Box plots showing variation in 10 m sea surface temperature (left) and net primary productivity (right) across identified clusters. Colors correspond to the same clusters shown in thw map, highlighting differences in environmental conditions among clusters.
+
+library(ggplot2)
+
+meta_env$Cluster <- as.factor(clusters)
+env$Cluster <- meta_env$Cluster
+
+env_long <- env |> 
+  pivot_longer(cols = c(Temp_sst_10m, NPPC), 
+               names_to = "Variable", 
+               values_to = "Value") |> 
+  mutate(Variable = recode(Variable, "Temp_sst_10m" = "10 m SST",
+                           "NPPC" = "NPP"))
+
+ggplot(env_long, aes(x = Cluster, y = Value, fill = Cluster)) +
+  geom_boxplot() +
+  facet_wrap(~ Variable, scales = "free_y") +
+  theme_bw() +
+  scale_fill_viridis_d(option = "C") +
+  labs(x = "Cluster", y = "Value") 
+
+anova_temp <- aov(Temp_sst_10m ~ Cluster, data = env)
+anova_npp <- aov(NPPC ~ Cluster, data = env)
+# summary(anova_temp)
+# summary(anova_npp)
+```
